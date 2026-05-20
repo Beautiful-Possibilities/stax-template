@@ -10,12 +10,24 @@ function apiUrl(dirPath: string, repo = DEFAULT_REPO, branch = DEFAULT_BRANCH): 
 }
 
 export async function fetchText(filePath: string): Promise<string> {
-  const url = rawUrl(filePath);
-  const res = await fetch(url);
+  // Use the GitHub Contents API (not raw.githubusercontent.com) — the API
+  // honors branch refs immediately, while the raw CDN can be ~5 min stale.
+  const url = `https://api.github.com/repos/${DEFAULT_REPO}/contents/${filePath}?ref=${DEFAULT_BRANCH}`;
+  const res = await fetch(url, {
+    headers: {
+      Accept: 'application/vnd.github.raw+json',
+      ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}),
+    },
+  });
   if (!res.ok) {
     throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
   }
   return res.text();
+}
+
+/** Fallback raw URL (kept for cases where Contents API is rate-limited). */
+export function getRawUrl(filePath: string): string {
+  return rawUrl(filePath);
 }
 
 export type GitHubTreeEntry = {

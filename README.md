@@ -1,36 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Stax
 
-## Getting Started
+> A self-hosted, modular admin template for solo entrepreneurs. Deploy your own copy on your own Vercel + Supabase, install modules with one command, customize everything with Claude Code.
 
-First, run the development server:
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fozluv%2Fstax-template)
+
+## What you get on Day 1
+
+- A working Next.js 16 admin shell with magic-link login
+- A sidebar layout ready for modules to plug into
+- A CLI (`npx stax add <module>`) for installing free + paid modules
+- 5 layers of tests (smoke, functional, integration, QA + Security checklists)
+- A 5-minute deploy to Vercel
+
+## Quick start (5 minutes)
+
+### 1. Click the Vercel button above (or clone manually)
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/ozluv/stax-template.git my-business
+cd my-business
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Create a Supabase project
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Go to https://supabase.com → New project. Once it's ready, grab the API keys.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 3. Set env vars
 
-## Learn More
+```bash
+cp .env.example .env.local
+```
 
-To learn more about Next.js, take a look at the following resources:
+Open `.env.local` and paste:
+- `NEXT_PUBLIC_SUPABASE_URL` (Supabase → Settings → API → Project URL)
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` (same page → anon public)
+- `SUPABASE_SERVICE_ROLE_KEY` (same page → service_role — keep secret)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 4. Boot
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+pnpm dev
+```
 
-## Deploy on Vercel
+Visit http://localhost:3000. You'll be redirected to `/login`. Sign in with your email; check your inbox; click the magic link; you're in.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 5. Add a module
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npx stax add _test-stub
+```
+
+Then visit `/_test-stub` — if you see the test page, the install path works end-to-end.
+
+## Installing modules
+
+```bash
+npx stax list                # show available modules
+npx stax add contacts        # install the contacts module (Phase 2+)
+npx stax add emails-resend   # install email sending (Phase 3+)
+npx stax doctor              # health-check
+```
+
+Free modules install silently. Paid modules show a license link first; you confirm and install.
+
+## Customizing
+
+Stax is built to be modified. The interface is the surface area; Claude Code is the customization engine. See [docs/customizing-with-claude-code.md](docs/customizing-with-claude-code.md) for the workflow.
+
+## Docs
+
+- [Module SDK reference](docs/module-sdk.md)
+- [Customizing with Claude Code](docs/customizing-with-claude-code.md)
+- [QA checklist](docs/qa-checklist.md)
+- [Security checklist](docs/security-checklist.md)
+
+## License
+
+MIT (this template). Individual modules carry their own license — see each module's README.

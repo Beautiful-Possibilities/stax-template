@@ -96,7 +96,7 @@ The fast path: click the **Deploy with Vercel** button in the project README. Ve
 The manual path (recommended your first time so you can see what's happening):
 
 ```bash
-git clone https://github.com/ozluv/stax-template.git my-business
+git clone https://github.com/Beautiful-Possibilities/stax-template.git my-business
 cd my-business
 pnpm install
 ```

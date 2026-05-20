@@ -6,7 +6,7 @@ import path from 'node:path';
 export const createCommand = new Command('create')
   .description('Clone the stax-template into a new project directory')
   .argument('<dir>', 'target directory name (must not exist)')
-  .option('--repo <url>', 'override template repo URL', 'https://github.com/ozluv/stax-template.git')
+  .option('--repo <url>', 'override template repo URL', 'https://github.com/Beautiful-Possibilities/stax-template.git')
   .action(async (dir: string, opts: { repo: string }) => {
     const target = path.resolve(process.cwd(), dir);
     try {

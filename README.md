@@ -23,7 +23,7 @@ If you've done this before, the 5-minute quick start is below.
 ### 1. Click the Vercel button above (or clone manually)
 
 ```bash
-git clone https://github.com/ozluv/stax-template.git my-business
+git clone https://github.com/Beautiful-Possibilities/stax-template.git my-business
 cd my-business
 pnpm install
 ```

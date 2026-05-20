@@ -1,4 +1,4 @@
-const DEFAULT_REPO = process.env.STAX_MODULES_REPO ?? 'ozluv/stax-modules';
+const DEFAULT_REPO = process.env.STAX_MODULES_REPO ?? 'Beautiful-Possibilities/stax-modules';
 const DEFAULT_BRANCH = process.env.STAX_MODULES_BRANCH ?? 'main';
 
 function rawUrl(filePath: string, repo = DEFAULT_REPO, branch = DEFAULT_BRANCH): string {

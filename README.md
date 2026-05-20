@@ -12,6 +12,12 @@
 - 5 layers of tests (smoke, functional, integration, QA + Security checklists)
 - A 5-minute deploy to Vercel
 
+## New here? Start with the guide
+
+👉 **[Read `docs/getting-started.md`](docs/getting-started.md)** — a complete walkthrough from zero to your-own-deployed-admin, plus your first conversation with Claude Code. ~30 minutes.
+
+If you've done this before, the 5-minute quick start is below.
+
 ## Quick start (5 minutes)
 
 ### 1. Click the Vercel button above (or clone manually)
@@ -70,8 +76,9 @@ Stax is built to be modified. The interface is the surface area; Claude Code is 
 
 ## Docs
 
-- [Module SDK reference](docs/module-sdk.md)
-- [Customizing with Claude Code](docs/customizing-with-claude-code.md)
+- **[Getting started](docs/getting-started.md)** — the canonical walkthrough + teaching guide (start here)
+- [Module SDK reference](docs/module-sdk.md) — for module authors
+- [Customizing with Claude Code](docs/customizing-with-claude-code.md) — the short version of the customization workflow
 - [QA checklist](docs/qa-checklist.md)
 - [Security checklist](docs/security-checklist.md)
 

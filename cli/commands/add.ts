@@ -1,16 +1,9 @@
 import { Command } from 'commander';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fetchText, walkDir } from '../lib/github-fetch';
+import { fetchText } from '../lib/github-fetch';
 import { writeWithConflictCheck } from '../lib/file-copy';
 import { ModuleManifestSchema, type ModuleManifest } from '../lib/manifest-schema';
-
-const DEST_MAP: Record<string, string> = {
-  routes: 'app',
-  components: 'components',
-  lib: 'lib',
-  migrations: 'supabase/migrations',
-};
 
 type RegistryFile = {
   version: 1;
@@ -40,13 +33,8 @@ async function writeRegistry(reg: RegistryFile): Promise<void> {
 }
 
 async function fetchManifest(moduleName: string): Promise<ModuleManifest> {
-  const text = await fetchText(`modules/${moduleName}/manifest.ts`);
-  // Module manifests are TS source; we extract the `default export object` heuristically.
-  // Phase 1 contract: manifest must be a single `export default { ... } satisfies ...;` block.
-  const match = text.match(/export default\s+(\{[\s\S]*?\})\s+satisfies/);
-  if (!match) throw new Error(`Could not parse manifest for "${moduleName}"`);
-
-  const obj = new Function(`return ${match[1]};`)();
+  const text = await fetchText(`modules/${moduleName}/registry-item.json`);
+  const obj = JSON.parse(text);
   const parsed = ModuleManifestSchema.parse(obj);
   if (parsed.name !== moduleName) {
     throw new Error(`Manifest name "${parsed.name}" does not match requested "${moduleName}"`);
@@ -54,29 +42,33 @@ async function fetchManifest(moduleName: string): Promise<ModuleManifest> {
   return parsed;
 }
 
-function localDestForSource(moduleName: string, sourcePath: string): string | null {
-  // sourcePath looks like 'modules/<name>/routes/page.tsx'
-  const rel = sourcePath.replace(new RegExp(`^modules/${moduleName}/`), '');
-  const topDir = rel.split('/')[0];
-  const remainder = rel.split('/').slice(1).join('/');
+/**
+ * Resolve a registry file's `target` (or fall back to `path`) into an absolute
+ * destination on the customer's machine. Handles shadcn-style alias prefixes
+ * (@components/, @lib/, etc.) and the Stax-specific `registry:migration` type
+ * which gets a timestamp prefix injected for ordering.
+ */
+function resolveDest(moduleName: string, file: { path: string; type: string; target?: string }): string {
+  const cwd = process.cwd();
+  const explicitTarget = file.target ?? file.path;
 
-  if (topDir === 'manifest.ts') {
-    return path.join(process.cwd(), 'modules', moduleName, 'manifest.ts');
-  }
-  if (topDir === 'README.md' || topDir === 'api.ts') {
-    return path.join(process.cwd(), 'modules', moduleName, topDir);
-  }
-  const destRoot = DEST_MAP[topDir];
-  if (!destRoot) return null;
+  // Shadcn alias placeholders
+  const aliased = explicitTarget
+    .replace(/^@components\//, 'components/')
+    .replace(/^@ui\//, 'components/ui/')
+    .replace(/^@lib\//, 'lib/')
+    .replace(/^@hooks\//, 'hooks/')
+    .replace(/^@utils\//, 'lib/utils/');
 
-  if (topDir === 'migrations') {
+  // Stax: migrations get a timestamp prefix so Supabase applies them in order
+  if (file.type === 'registry:migration') {
     const ts = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
-    return path.join(process.cwd(), destRoot, `${ts}_${moduleName}_${remainder}`);
+    const dir = path.dirname(aliased);
+    const filename = path.basename(aliased);
+    return path.join(cwd, dir, `${ts}_${moduleName}_${filename}`);
   }
-  if (topDir === 'routes') {
-    return path.join(process.cwd(), 'app', moduleName, remainder);
-  }
-  return path.join(process.cwd(), destRoot, moduleName, remainder);
+
+  return path.join(cwd, aliased);
 }
 
 export const addCommand = new Command('add')
@@ -86,16 +78,17 @@ export const addCommand = new Command('add')
   .action(async (moduleName: string, opts: { yes?: boolean }) => {
     console.log(`Fetching manifest for "${moduleName}"…`);
     const manifest = await fetchManifest(moduleName);
+    const stax = manifest.meta.stax;
 
-    if (manifest.tier === 'paid') {
-      console.log(`\nThis is a paid module. License: ${manifest.licenseUrl ?? '(see module README)'}`);
+    if (stax.tier === 'paid') {
+      console.log(`\nThis is a paid module. License: ${stax.licenseUrl ?? '(see module README)'}`);
       console.log('By installing, you confirm you have purchased a license.\n');
     }
 
     // Dependency check
     const registry = await readRegistry();
     const installedNames = new Set(registry.modules.map((m) => m.name));
-    for (const dep of manifest.requires) {
+    for (const dep of stax.requires) {
       if (!installedNames.has(dep)) {
         console.error(
           `✗ Missing required module: ${dep}. Install it first with: npx stax add ${dep}`,
@@ -104,36 +97,67 @@ export const addCommand = new Command('add')
       }
     }
 
-    console.log(`Listing files under modules/${moduleName}…`);
-    const files = await walkDir(`modules/${moduleName}`);
-
     let wrote = 0;
     let skipped = 0;
-    for (const sourcePath of files) {
-      const to = localDestForSource(moduleName, sourcePath);
-      if (!to) continue;
+    let migrationsCopied = 0;
+
+    // Always copy the manifest itself to modules/<name>/registry-item.json
+    // so the customer's repo carries the install record.
+    const manifestDest = path.join(process.cwd(), 'modules', moduleName, 'registry-item.json');
+    const manifestText = await fetchText(`modules/${moduleName}/registry-item.json`);
+    const result = await writeWithConflictCheck(
+      { from: `modules/${moduleName}/registry-item.json`, to: manifestDest, contents: manifestText },
+      { yes: opts.yes },
+    );
+    if (result === 'wrote') wrote++;
+    else skipped++;
+    console.log(`  ${result === 'wrote' ? '+' : '-'} ${path.relative(process.cwd(), manifestDest)}`);
+
+    // Copy each declared file
+    for (const file of manifest.files) {
+      const sourcePath = `modules/${moduleName}/${file.path}`;
+      const dest = resolveDest(moduleName, file);
       const contents = await fetchText(sourcePath);
-      const result = await writeWithConflictCheck(
-        { from: sourcePath, to, contents },
+      const r = await writeWithConflictCheck(
+        { from: sourcePath, to: dest, contents },
         { yes: opts.yes },
       );
-      if (result === 'wrote') wrote++;
+      if (r === 'wrote') wrote++;
       else skipped++;
-      console.log(`  ${result === 'wrote' ? '+' : '-'} ${path.relative(process.cwd(), to)}`);
+      if (file.type === 'registry:migration') migrationsCopied++;
+      console.log(`  ${r === 'wrote' ? '+' : '-'} ${path.relative(process.cwd(), dest)}`);
     }
 
-    // Update registry (replace existing entry if reinstalling)
+    // Optional README
+    try {
+      const readmeText = await fetchText(`modules/${moduleName}/README.md`);
+      const readmeDest = path.join(process.cwd(), 'modules', moduleName, 'README.md');
+      const r = await writeWithConflictCheck(
+        { from: `modules/${moduleName}/README.md`, to: readmeDest, contents: readmeText },
+        { yes: opts.yes },
+      );
+      if (r === 'wrote') wrote++;
+      else skipped++;
+      console.log(`  ${r === 'wrote' ? '+' : '-'} ${path.relative(process.cwd(), readmeDest)}`);
+    } catch {
+      // README is optional
+    }
+
+    // Update registry
     const next = registry.modules.filter((m) => m.name !== moduleName);
     next.push({
       name: manifest.name,
-      version: manifest.version,
-      tier: manifest.tier,
+      version: stax.version,
+      tier: stax.tier,
       installedAt: new Date().toISOString(),
     });
     await writeRegistry({ version: 1, modules: next });
 
     console.log(`\nDone. ${wrote} written, ${skipped} skipped.`);
-    if (files.some((f) => f.includes('/migrations/'))) {
-      console.log('\nMigrations were copied. Apply them with:  supabase db push');
+    if (migrationsCopied > 0) {
+      console.log(`\n${migrationsCopied} migration(s) copied. Apply them with:  supabase db push`);
+    }
+    if (manifest.docs) {
+      console.log(`\n${manifest.docs}`);
     }
   });

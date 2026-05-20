@@ -36,16 +36,18 @@ export type LoadedModuleManifest = {
   description: string;
   tier: 'free' | 'paid';
   navItems?: ModuleNavItem[];
-  settingsPath?: string;
+  settingsPath?: string | null;
+};
+
+type RegistryItemJson = {
+  name: string;
+  description: string;
+  meta?: { stax?: { version: string; tier: 'free' | 'paid'; navItems?: ModuleNavItem[]; settingsPath?: string | null } };
 };
 
 /**
- * Loads manifests for all installed modules. Skips modules whose code
- * isn't present (e.g., partially installed) instead of throwing.
- *
- * Implementation note: uses a webpackIgnore-style dynamic require so the
- * bundler doesn't try to statically resolve `@/modules/*` at build time
- * (which would error on a fresh install where no modules exist yet).
+ * Loads manifests for all installed modules from their copied-in registry-item.json files.
+ * Skips modules whose code isn't present (e.g., partially installed) instead of throwing.
  */
 export async function loadInstalledManifests(): Promise<LoadedModuleManifest[]> {
   const registry = await readInstalledModules();
@@ -54,14 +56,20 @@ export async function loadInstalledManifests(): Promise<LoadedModuleManifest[]> 
   const manifests: LoadedModuleManifest[] = [];
   for (const entry of registry.modules) {
     try {
-      const manifestPath = path.join(process.cwd(), 'modules', entry.name, 'manifest.ts');
-      // Use a function-scoped variable for the dynamic specifier so bundlers
-      // don't attempt to statically resolve it as an import map entry.
-      const spec = manifestPath;
-      const mod = (await import(/* webpackIgnore: true */ spec)) as { default: LoadedModuleManifest };
-      manifests.push(mod.default);
+      const manifestPath = path.join(process.cwd(), 'modules', entry.name, 'registry-item.json');
+      const raw = await fs.readFile(manifestPath, 'utf-8');
+      const json = JSON.parse(raw) as RegistryItemJson;
+      if (!json.meta?.stax) continue;
+      manifests.push({
+        name: json.name,
+        version: json.meta.stax.version,
+        description: json.description,
+        tier: json.meta.stax.tier,
+        navItems: json.meta.stax.navItems,
+        settingsPath: json.meta.stax.settingsPath,
+      });
     } catch {
-      // Module declared installed but code missing — skip silently
+      // Module declared installed but manifest missing — skip silently
     }
   }
 

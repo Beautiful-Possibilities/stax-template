@@ -42,15 +42,24 @@ export type LoadedModuleManifest = {
 /**
  * Loads manifests for all installed modules. Skips modules whose code
  * isn't present (e.g., partially installed) instead of throwing.
+ *
+ * Implementation note: uses a webpackIgnore-style dynamic require so the
+ * bundler doesn't try to statically resolve `@/modules/*` at build time
+ * (which would error on a fresh install where no modules exist yet).
  */
 export async function loadInstalledManifests(): Promise<LoadedModuleManifest[]> {
   const registry = await readInstalledModules();
-  const manifests: LoadedModuleManifest[] = [];
+  if (registry.modules.length === 0) return [];
 
+  const manifests: LoadedModuleManifest[] = [];
   for (const entry of registry.modules) {
     try {
-      const mod = await import(`@/modules/${entry.name}/manifest`);
-      manifests.push(mod.default as LoadedModuleManifest);
+      const manifestPath = path.join(process.cwd(), 'modules', entry.name, 'manifest.ts');
+      // Use a function-scoped variable for the dynamic specifier so bundlers
+      // don't attempt to statically resolve it as an import map entry.
+      const spec = manifestPath;
+      const mod = (await import(/* webpackIgnore: true */ spec)) as { default: LoadedModuleManifest };
+      manifests.push(mod.default);
     } catch {
       // Module declared installed but code missing — skip silently
     }

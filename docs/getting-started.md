@@ -8,6 +8,7 @@ This is a living document. As new modules ship, new sections get added. If somet
 
 ## Table of Contents
 
+0. **[Step 0 — Wire up Claude Code's superpowers (MCPs)](teach/00-claude-superpowers.md)** ← do this first if you're new
 1. [What Stax actually is](#1-what-stax-actually-is)
 2. [The big mental shift](#2-the-big-mental-shift)
 3. [Before you start](#3-before-you-start)
